@@ -147,6 +147,7 @@ async def websocket_audio_endpoint(websocket: WebSocket):
 
     vad = StormVAD()
     ws_lock = asyncio.Lock()
+    barge_in_candidate_chunks = 0
 
     async def safe_send_json(data: dict):
         async with ws_lock:
@@ -269,10 +270,15 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                     })
 
                 # Check for Barge-In Interruption if user starts speaking with high energy while Storm-Bot is generating/playing
-                if vad_res["speech_started"] and session_mgr.is_bot_speaking and vad_res["rms"] > 0.06:
-                    print("[Storm-Bot] User barge-in detected! Halting bot audio.")
-                    session_mgr.trigger_barge_in()
-                    await safe_send_json({"type": "barge_in_stop"})
+                if session_mgr.is_bot_speaking and vad_res["rms"] > 0.06:
+                    barge_in_candidate_chunks += 1
+                    if barge_in_candidate_chunks >= 3:
+                        print("[Storm-Bot] User barge-in detected! Halting bot audio.")
+                        session_mgr.trigger_barge_in()
+                        await safe_send_json({"type": "barge_in_stop"})
+                        barge_in_candidate_chunks = 0
+                elif not session_mgr.is_bot_speaking or vad_res["rms"] <= 0.03:
+                    barge_in_candidate_chunks = 0
 
                 # On Speech End (User finished speaking)
                 if vad_res["speech_ended"] and vad_res["audio_buffer"] is not None:

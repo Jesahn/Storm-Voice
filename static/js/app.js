@@ -191,6 +191,7 @@ function initWebSocket() {
       console.warn(`[Storm Audio] Voice status: ${msg.status || "unavailable"}`);
       showStormNotice("Storm voice is preparing the response audio.");
     } else if (msg.type === "barge_in_stop") {
+      console.warn("[Storm Audio] Playback stopped by interruption signal.");
       stopCurrentAudio();
       setBotState("LISTENING");
     } else if (msg.type === "bot_finished") {
@@ -244,6 +245,9 @@ async function startMicrophone() {
 
     scriptProcessor.onaudioprocess = (e) => {
       if (!isMicActive || !socket || socket.readyState !== WebSocket.OPEN) return;
+
+      // Prevent Storm's own speaker output from being sent back into VAD as a false barge-in.
+      if (isPlayingAudio) return;
 
       const inputBuffer = e.inputBuffer.getChannelData(0);
       const resampled = resampleTo16k(inputBuffer, audioCtx.sampleRate);
@@ -301,6 +305,7 @@ document.addEventListener("keydown", unlockAudioContext, { passive: true });
 function enqueueAudio(base64Data) {
   if (!base64Data) return;
   audioQueue.push(base64Data);
+  console.log(`[Storm Audio] Queued voice chunk. Queue length: ${audioQueue.length}.`);
   updateAudioDiagnostics();
   if (!isPlayingAudio && !currentAudioSource) {
     playNextAudioChunk();
@@ -343,12 +348,14 @@ async function playNextAudioChunk() {
     updateAudioDiagnostics();
 
     source.onended = () => {
+      console.log("[Storm Audio] Voice chunk ended.");
       currentAudioSource = null;
       updateAudioDiagnostics();
       playNextAudioChunk();
     };
 
     source.start(0);
+    console.log(`[Storm Audio] Voice chunk started. Duration: ${audioBuffer.duration.toFixed(2)}s. Context: ${audioCtx.state}.`);
   } catch (err) {
     console.warn("Storm WebAudio notice, switching to fallback:", err);
     try {
@@ -357,11 +364,13 @@ async function playNextAudioChunk() {
       currentAudioSource = audio;
       updateAudioDiagnostics();
       audio.onended = () => {
+        console.log("[Storm Audio] Fallback voice chunk ended.");
         currentAudioSource = null;
         updateAudioDiagnostics();
         playNextAudioChunk();
       };
       audio.onerror = () => {
+        console.warn("[Storm Audio] Fallback voice chunk failed.");
         currentAudioSource = null;
         updateAudioDiagnostics();
         playNextAudioChunk();
@@ -390,6 +399,9 @@ function checkBotFinished() {
 }
 
 function stopCurrentAudio() {
+  if (audioQueue.length > 0 || currentAudioSource) {
+    console.warn("[Storm Audio] Clearing active voice playback.");
+  }
   audioQueue = [];
   if (currentAudioSource) {
     try {
