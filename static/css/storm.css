@@ -61,6 +61,7 @@ body {
   align-items: center;
   border-bottom: 1px solid var(--border-glass);
   backdrop-filter: blur(12px);
+  gap: 18px;
 }
 
 .brand-logo {
@@ -106,7 +107,9 @@ body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .btn-storm {
@@ -121,8 +124,10 @@ body {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   transition: var(--transition);
+  white-space: nowrap;
 }
 
 .btn-storm:hover {
@@ -294,6 +299,11 @@ body {
   background: rgba(0, 240, 255, 0.08);
 }
 
+.transcript-entry.system {
+  border-left-color: var(--accent-green);
+  background: rgba(16, 185, 129, 0.08);
+}
+
 .entry-speaker {
   font-size: 11px;
   font-weight: 600;
@@ -316,6 +326,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   padding: 10px 14px;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.04);
@@ -332,6 +343,8 @@ body {
   color: var(--accent-cyan);
   font-weight: 500;
   font-size: 12px;
+  text-align: right;
+  word-break: break-word;
 }
 
 /* Personality selector list */
@@ -416,6 +429,59 @@ body {
 .input-storm:focus {
   outline: none;
   border-color: var(--accent-cyan);
+}
+
+@media (max-width: 1180px) {
+  .app-container {
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .storm-navbar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 14px 0;
+  }
+
+  .header-actions {
+    justify-content: flex-start;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .center-viewport {
+    min-height: 520px;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-container {
+    padding: 0 12px;
+  }
+
+  .brand-title {
+    font-size: 18px;
+  }
+
+  .btn-storm {
+    width: 100%;
+  }
+
+  .control-bar {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .storm-orb-canvas {
+    width: min(280px, 80vw);
+    height: min(280px, 80vw);
+  }
+
+  .modal-card {
+    width: calc(100vw - 24px);
+  }
 }
 
 /* Custom Scrollbars */

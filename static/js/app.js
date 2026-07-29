@@ -10,13 +10,32 @@ let isMicActive = false;
 // Audio Playback Queue
 let audioQueue = [];
 let isPlayingAudio = false;
-let currentAudioElement = null;
+let isResponseActive = false;
 
 // App State
 let currentBotEntry = null;
 let currentBotText = "";
 let vadRmsHistory = new Array(60).fill(0);
 let botState = "READY"; // READY, LISTENING, THINKING, TALKING
+
+window.StormDebug = {
+  getAudioState: () => ({
+    queueLength: audioQueue.length,
+    isPlayingAudio,
+    isResponseActive,
+    hasCurrentAudioSource: Boolean(currentAudioSource),
+    audioContextState: audioCtx ? audioCtx.state : "not-created",
+    botState
+  })
+};
+
+function updateAudioDiagnostics() {
+  if (!document.body) return;
+  document.body.dataset.stormAudioQueue = String(audioQueue.length);
+  document.body.dataset.stormAudioPlaying = String(isPlayingAudio);
+  document.body.dataset.stormAudioSource = String(Boolean(currentAudioSource));
+  document.body.dataset.stormAudioContext = audioCtx ? audioCtx.state : "not-created";
+}
 
 // Helper DOM Element Getter
 const getEl = (id) => document.getElementById(id);
@@ -50,14 +69,12 @@ async function initSystemStatus() {
     const status = await res.json();
     
     if (getEl("val-storage")) getEl("val-storage").innerText = status.isolation_status || "D:\\ Drive Locked";
-    if (getEl("val-lmstudio")) getEl("val-lmstudio").innerText = status.llm_backend?.online ? "Connected" : "Offline / Local";
+    if (getEl("val-lmstudio")) getEl("val-lmstudio").innerText = status.llm_backend?.online ? "Connected" : "Standby";
     
-    const modelName = (status.llm_backend?.available_models && status.llm_backend.available_models.length > 0) 
-      ? status.llm_backend.available_models[0] 
-      : "Gemma 4 E2B";
-    if (getEl("val-llm")) getEl("val-llm").innerText = modelName;
+    if (getEl("val-llm")) getEl("val-llm").innerText = "Storm Core";
   } catch (err) {
     console.warn("Storm Telemetry Notice:", err);
+    showStormNotice("Storm telemetry is initializing.");
   }
 }
 
@@ -84,7 +101,8 @@ async function loadPersonalities() {
       }
     }
   } catch (err) {
-    console.error("Failed to load personalities:", err);
+    console.warn("Storm personality notice:", err);
+    showStormNotice("Storm personality controls are initializing.");
   }
 }
 
@@ -97,7 +115,8 @@ async function switchPersonality(key) {
     });
     loadPersonalities();
   } catch (err) {
-    console.error("Failed to switch personality:", err);
+    console.warn("Storm personality switch notice:", err);
+    showStormNotice("Storm could not switch persona yet.");
   }
 }
 
@@ -121,7 +140,8 @@ async function loadVoiceProfiles() {
       });
     }
   } catch (err) {
-    console.error("Failed to load voice profiles:", err);
+    console.warn("Storm voice profile notice:", err);
+    showStormNotice("Storm voice profiles are initializing.");
   }
 }
 
@@ -133,7 +153,8 @@ async function switchVoiceProfile(voiceId) {
       body: JSON.stringify({ voice_id: voiceId })
     });
   } catch (err) {
-    console.error("Failed to switch voice profile:", err);
+    console.warn("Storm voice switch notice:", err);
+    showStormNotice("Storm could not switch voice yet.");
   }
 }
 
@@ -157,14 +178,13 @@ function initWebSocket() {
     } else if (msg.type === "user_transcript") {
       appendUserTranscript(msg.text);
     } else if (msg.type === "bot_thinking") {
-      isPlayingAudio = true;
+      isResponseActive = true;
       setBotState("THINKING");
     } else if (msg.type === "bot_text_chunk") {
-      isPlayingAudio = true;
+      isResponseActive = true;
       setBotState("TALKING");
       appendBotChunk(msg.chunk);
     } else if (msg.type === "bot_audio_chunk") {
-      isPlayingAudio = true;
       enqueueAudio(msg.audio);
     } else if (msg.type === "barge_in_stop") {
       stopCurrentAudio();
@@ -221,9 +241,6 @@ async function startMicrophone() {
     scriptProcessor.onaudioprocess = (e) => {
       if (!isMicActive || !socket || socket.readyState !== WebSocket.OPEN) return;
 
-      // Do not send mic frames while Storm-Bot is outputting audio to avoid speaker echo feedback
-      if (isPlayingAudio) return;
-
       const inputBuffer = e.inputBuffer.getChannelData(0);
       const resampled = resampleTo16k(inputBuffer, audioCtx.sampleRate);
 
@@ -240,7 +257,7 @@ async function startMicrophone() {
     if (btn) btn.classList.add("active");
     setBotState("LISTENING");
   } catch (err) {
-    alert("Microphone Access Required: Please allow browser microphone permission for Storm-Voice.");
+    showStormNotice("Storm needs microphone access to listen.");
   }
 }
 
@@ -280,7 +297,8 @@ document.addEventListener("keydown", unlockAudioContext, { passive: true });
 function enqueueAudio(base64Data) {
   if (!base64Data) return;
   audioQueue.push(base64Data);
-  if (!isPlayingAudio) {
+  updateAudioDiagnostics();
+  if (!isPlayingAudio && !currentAudioSource) {
     playNextAudioChunk();
   }
 }
@@ -289,11 +307,16 @@ async function playNextAudioChunk() {
   if (audioQueue.length === 0) {
     isPlayingAudio = false;
     currentAudioSource = null;
+    updateAudioDiagnostics();
+    if (!isResponseActive) {
+      setBotState(isMicActive ? "LISTENING" : "READY");
+    }
     return;
   }
 
   isPlayingAudio = true;
   const base64Data = audioQueue.shift();
+  updateAudioDiagnostics();
 
   try {
     unlockAudioContext();
@@ -313,8 +336,11 @@ async function playNextAudioChunk() {
     source.connect(audioCtx.destination);
     
     currentAudioSource = source;
+    updateAudioDiagnostics();
 
     source.onended = () => {
+      currentAudioSource = null;
+      updateAudioDiagnostics();
       playNextAudioChunk();
     };
 
@@ -324,9 +350,23 @@ async function playNextAudioChunk() {
     try {
       const audioUrl = "data:audio/wav;base64," + base64Data;
       const audio = new Audio(audioUrl);
-      audio.onended = () => playNextAudioChunk();
-      audio.onerror = () => playNextAudioChunk();
-      audio.play().catch(() => playNextAudioChunk());
+      currentAudioSource = audio;
+      updateAudioDiagnostics();
+      audio.onended = () => {
+        currentAudioSource = null;
+        updateAudioDiagnostics();
+        playNextAudioChunk();
+      };
+      audio.onerror = () => {
+        currentAudioSource = null;
+        updateAudioDiagnostics();
+        playNextAudioChunk();
+      };
+      audio.play().catch(() => {
+        currentAudioSource = null;
+        updateAudioDiagnostics();
+        playNextAudioChunk();
+      });
     } catch (e) {
       playNextAudioChunk();
     }
@@ -334,9 +374,12 @@ async function playNextAudioChunk() {
 }
 
 function checkBotFinished() {
+  isResponseActive = false;
   if (audioQueue.length === 0 && !currentAudioSource) {
     isPlayingAudio = false;
-    setBotState("LISTENING");
+    updateAudioDiagnostics();
+    notifyPlaybackFinished();
+    setBotState(isMicActive ? "LISTENING" : "READY");
   } else {
     setTimeout(checkBotFinished, 200);
   }
@@ -346,12 +389,28 @@ function stopCurrentAudio() {
   audioQueue = [];
   if (currentAudioSource) {
     try {
-      currentAudioSource.stop();
-      currentAudioSource.disconnect();
+      if (typeof currentAudioSource.stop === "function") {
+        currentAudioSource.stop();
+      } else {
+        currentAudioSource.pause();
+        currentAudioSource.currentTime = 0;
+      }
+      if (typeof currentAudioSource.disconnect === "function") {
+        currentAudioSource.disconnect();
+      }
     } catch (e) {}
     currentAudioSource = null;
   }
   isPlayingAudio = false;
+  isResponseActive = false;
+  updateAudioDiagnostics();
+  notifyPlaybackFinished();
+}
+
+function notifyPlaybackFinished() {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ action: "playback_finished" }));
+  }
 }
 
 // UI State Updates
@@ -398,20 +457,31 @@ function appendUserTranscript(text) {
 
   const entry = document.createElement("div");
   entry.className = "transcript-entry user";
-  entry.innerHTML = `
-    <div class="entry-speaker">YOU <span>${new Date().toLocaleTimeString()}</span></div>
-    ${text}
-  `;
+  const speaker = document.createElement("div");
+  speaker.className = "entry-speaker";
+  speaker.append("YOU ");
+  const time = document.createElement("span");
+  time.innerText = new Date().toLocaleTimeString();
+  speaker.appendChild(time);
+  entry.appendChild(speaker);
+  entry.append(document.createTextNode(text));
   box.appendChild(entry);
   box.scrollTop = box.scrollHeight;
 
   // Prepare next Bot Entry
   currentBotEntry = document.createElement("div");
   currentBotEntry.className = "transcript-entry bot";
-  currentBotEntry.innerHTML = `
-    <div class="entry-speaker">STORM-BOT <span>${new Date().toLocaleTimeString()}</span></div>
-    <span class="bot-text">...</span>
-  `;
+  const botSpeaker = document.createElement("div");
+  botSpeaker.className = "entry-speaker";
+  botSpeaker.append("STORM-BOT ");
+  const botTime = document.createElement("span");
+  botTime.innerText = new Date().toLocaleTimeString();
+  botSpeaker.appendChild(botTime);
+  const botSpan = document.createElement("span");
+  botSpan.className = "bot-text";
+  botSpan.innerText = "...";
+  currentBotEntry.appendChild(botSpeaker);
+  currentBotEntry.appendChild(botSpan);
   box.appendChild(currentBotEntry);
   currentBotText = "";
 }
@@ -509,7 +579,7 @@ async function submitVoiceClone() {
   const fileInput = getEl("clone-file-input");
 
   if (!nameInput || !fileInput || !nameInput.value.trim() || fileInput.files.length === 0) {
-    alert("Please enter a persona name and select an audio sample file.");
+    showStormNotice("Add a persona name and audio sample to create a voice.");
     return;
   }
 
@@ -523,11 +593,11 @@ async function submitVoiceClone() {
       body: formData
     });
     const result = await res.json();
-    alert(result.message);
+    showStormNotice(result.message || "Storm voice persona created.");
     closeVoiceCloneModal();
     loadVoiceProfiles();
   } catch (err) {
-    alert("Voice cloning failed: " + err);
+    showStormNotice("Storm could not create that voice persona.");
   }
 }
 
@@ -543,10 +613,10 @@ async function testSpeakerOutput() {
     if (data.audio_base64) {
       enqueueAudio(data.audio_base64);
     } else {
-      alert("TTS server returned empty audio.");
+      showStormNotice("Storm voice output is not ready yet.");
     }
   } catch (err) {
-    alert("AI Voice Output Test Failed: " + err);
+    showStormNotice("Storm voice output test could not complete.");
   }
 }
 
@@ -560,6 +630,24 @@ async function exportLogs(format) {
     const data = await res.json();
     window.open(data.download_url, "_blank");
   } catch (err) {
-    alert("Export failed: " + err);
+    showStormNotice("Storm could not export the session yet.");
   }
+}
+
+function showStormNotice(message) {
+  const box = getEl("transcript-box");
+  if (!box) return;
+
+  const entry = document.createElement("div");
+  entry.className = "transcript-entry bot system";
+  const speaker = document.createElement("div");
+  speaker.className = "entry-speaker";
+  speaker.append("STORM ");
+  const time = document.createElement("span");
+  time.innerText = new Date().toLocaleTimeString();
+  speaker.appendChild(time);
+  entry.appendChild(speaker);
+  entry.append(document.createTextNode(message));
+  box.appendChild(entry);
+  box.scrollTop = box.scrollHeight;
 }

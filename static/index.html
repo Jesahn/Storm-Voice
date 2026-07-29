@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Storm-Voice | Real-Time Local AI Voice System</title>
-  <link rel="stylesheet" href="/static/css/storm.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+  <link rel="stylesheet" href="/static/css/storm.css?v=20260729b">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2218%22 fill=%22%23060913%22/><text x=%2250%22 y=%2268%22 text-anchor=%22middle%22 font-size=%2264%22 fill=%22%2300f0ff%22 font-family=%22Arial%22>S</text></svg>">
 </head>
 <body>
 
@@ -14,7 +14,7 @@
     <!-- Top Navigation Bar -->
     <header class="storm-navbar">
       <div class="brand-logo">
-        <div class="logo-icon">⚡</div>
+        <div class="logo-icon">S</div>
         <div>
           <span class="brand-title">STORM-VOICE</span>
           <span class="badge-tag">STORM-BOT ENGINE v1.0</span>
@@ -23,16 +23,16 @@
 
       <div class="header-actions">
         <button class="btn-storm" onclick="testSpeakerOutput()">
-          🔊 Test AI Voice Output
+          Voice Test
         </button>
         <button class="btn-storm" onclick="openVoiceCloneModal()">
-          🎤 Voice Clone Studio
+          Voice Studio
         </button>
         <button class="btn-storm" onclick="exportLogs('json')">
-          📥 Export Logs (JSON)
+          Export JSON
         </button>
         <button class="btn-storm btn-primary" onclick="exportLogs('md')">
-          📄 Export Presentation Log
+          Presentation Log
         </button>
       </div>
     </header>
@@ -55,20 +55,20 @@
             <span class="status-val" id="val-storage">D:\ Drive Isolated</span>
           </div>
           <div class="status-item">
-            <span class="status-label">LLM Engine</span>
-            <span class="status-val" id="val-llm">Gemma 4 E2B</span>
+            <span class="status-label">Reasoning Core</span>
+            <span class="status-val" id="val-llm">Storm Core</span>
           </div>
           <div class="status-item">
-            <span class="status-label">LM Studio Link</span>
+            <span class="status-label">Storm Core Link</span>
             <span class="status-val" id="val-lmstudio">Connected</span>
           </div>
           <div class="status-item">
             <span class="status-label">Speech Recognition</span>
-            <span class="status-val">NVIDIA Parakeet</span>
+            <span class="status-val">Storm Listen</span>
           </div>
           <div class="status-item">
             <span class="status-label">Speech Synthesis</span>
-            <span class="status-val">Qwen3-TTS / Clone</span>
+            <span class="status-val">Storm Voice</span>
           </div>
           <div class="status-item">
             <span class="status-label">Hardware Specs</span>
@@ -97,10 +97,10 @@
 
           <div class="control-bar">
             <button id="mic-toggle-btn" class="mic-toggle-btn" onclick="toggleMicrophone()" title="Start/Stop Microphone">
-              🎙️
+              MIC
             </button>
             <button class="btn-storm" onclick="triggerBargeIn()" style="padding: 12px 20px;">
-              🛑 Interrupt Storm-Bot
+              Interrupt Storm-Bot
             </button>
           </div>
         </div>
@@ -156,7 +156,7 @@
     <div class="modal-card">
       <div class="modal-header">
         <h3 style="font-size: 18px; font-weight: 600;">Microphone / File Voice Cloning</h3>
-        <button class="btn-storm" onclick="closeVoiceCloneModal()">✕</button>
+        <button class="btn-storm" onclick="closeVoiceCloneModal()">Close</button>
       </div>
       <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
         Upload a short audio sample (.wav or .mp3) or record via microphone to instantly clone a new custom voice persona for Storm-Bot.
@@ -175,6 +175,6 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=20260729b"></script>
 </body>
 </html>

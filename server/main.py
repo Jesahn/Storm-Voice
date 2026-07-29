@@ -50,12 +50,12 @@ async def get_system_status():
         "base_directory": str(env_config.BASE_DIR),
         "llm_backend": llm_health,
         "stt_engine": {
-            "name": "NVIDIA Parakeet / Local STT",
+            "name": "Storm Local Speech Recognition",
             "model": stt_engine.model_name,
             "status": "READY"
         },
         "tts_engine": {
-            "name": "Qwen3-TTS / Neural Voice Synthesizer",
+            "name": "Storm Neural Voice Synthesizer",
             "active_profile": tts_engine.active_voice_profile,
             "available_profiles_count": len(voices)
         },
@@ -218,8 +218,6 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                     "duration": synth_res["duration"]
                 })
 
-        session_mgr.set_bot_speaking(False)
-
         if full_bot_text.strip():
             latency_ms = (time.time() - start_time) * 1000.0
             session_mgr.add_bot_turn(
@@ -266,6 +264,8 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                 if data.get("action") == "interrupt":
                     session_mgr.trigger_barge_in()
                     await safe_send_json({"type": "barge_in_stop"})
+                elif data.get("action") == "playback_finished":
+                    session_mgr.set_bot_speaking(False)
 
     except WebSocketDisconnect:
         print("[Storm WebSocket] Client disconnected.")
