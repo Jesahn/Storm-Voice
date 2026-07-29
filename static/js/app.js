@@ -524,18 +524,16 @@ async function testSpeakerOutput() {
     if (audioCtx.state === "suspended") {
       await audioCtx.resume();
     }
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.5);
-    alert("Test Tone Sent! If you heard a 0.5s chime sound, your browser WebAudio output is working.");
+    setBotState("TALKING");
+    const res = await fetch("/api/test-tts");
+    const data = await res.json();
+    if (data.audio_base64) {
+      enqueueAudio(data.audio_base64);
+    } else {
+      alert("TTS server returned empty audio.");
+    }
   } catch (err) {
-    alert("Speaker Test Failed: " + err);
+    alert("AI Voice Output Test Failed: " + err);
   }
 }
 

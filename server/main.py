@@ -89,6 +89,12 @@ async def list_voices():
         "voices": tts_engine.list_voice_profiles()
     }
 
+@app.get("/api/test-tts")
+async def test_tts_endpoint():
+    """Generates a test speech audio payload using Kokoro ONNX neural voice."""
+    synth_res = tts_engine.synthesize_speech("Hello! I am Storm-Bot. This is a real-time local neural voice test.")
+    return synth_res
+
 @app.post("/api/voices/select")
 async def select_voice(data: dict):
     v_id = data.get("voice_id")
