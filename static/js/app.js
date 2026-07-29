@@ -6,6 +6,7 @@ let micStream = null;
 let scriptProcessor = null;
 let dummyGainNode = null;
 let isMicActive = false;
+let isMicCapturePaused = false;
 
 // Audio Playback Queue
 let audioQueue = [];
@@ -25,6 +26,7 @@ window.StormDebug = {
     isResponseActive,
     hasCurrentAudioSource: Boolean(currentAudioSource),
     audioContextState: audioCtx ? audioCtx.state : "not-created",
+    isMicCapturePaused,
     botState
   })
 };
@@ -35,6 +37,7 @@ function updateAudioDiagnostics() {
   document.body.dataset.stormAudioPlaying = String(isPlayingAudio);
   document.body.dataset.stormAudioSource = String(Boolean(currentAudioSource));
   document.body.dataset.stormAudioContext = audioCtx ? audioCtx.state : "not-created";
+  document.body.dataset.stormMicPaused = String(isMicCapturePaused);
 }
 
 // Helper DOM Element Getter
@@ -273,9 +276,11 @@ function stopMicrophone() {
   if (scriptProcessor) scriptProcessor.disconnect();
   if (dummyGainNode) dummyGainNode.disconnect();
   if (micStream) micStream.getTracks().forEach(track => track.stop());
+  isMicCapturePaused = false;
   isMicActive = false;
   const btn = getEl("mic-toggle-btn");
   if (btn) btn.classList.remove("active");
+  updateAudioDiagnostics();
   setBotState("READY");
 }
 
@@ -306,6 +311,7 @@ function enqueueAudio(base64Data) {
   if (!base64Data) return;
   audioQueue.push(base64Data);
   console.log(`[Storm Audio] Queued voice chunk. Queue length: ${audioQueue.length}.`);
+  setMicCapturePaused(true, "Storm voice playback");
   updateAudioDiagnostics();
   if (!isPlayingAudio && !currentAudioSource) {
     playNextAudioChunk();
@@ -316,6 +322,7 @@ async function playNextAudioChunk() {
   if (audioQueue.length === 0) {
     isPlayingAudio = false;
     currentAudioSource = null;
+    setMicCapturePaused(false, "Storm voice playback complete");
     updateAudioDiagnostics();
     if (!isResponseActive) {
       setBotState(isMicActive ? "LISTENING" : "READY");
@@ -419,8 +426,22 @@ function stopCurrentAudio() {
   }
   isPlayingAudio = false;
   isResponseActive = false;
+  setMicCapturePaused(false, "Storm voice playback stopped");
   updateAudioDiagnostics();
   notifyPlaybackFinished();
+}
+
+function setMicCapturePaused(paused, reason) {
+  if (!micStream || !isMicActive) return;
+  if (isMicCapturePaused === paused) return;
+
+  micStream.getAudioTracks().forEach(track => {
+    track.enabled = !paused;
+  });
+
+  isMicCapturePaused = paused;
+  console.log(`[Storm Mic] ${paused ? "Paused" : "Resumed"} capture: ${reason}.`);
+  updateAudioDiagnostics();
 }
 
 function notifyPlaybackFinished() {
