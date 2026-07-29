@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Storm-Voice | Real-Time Local AI Voice System</title>
+  <link rel="stylesheet" href="/static/css/storm.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Top Navigation Bar -->
+    <header class="storm-navbar">
+      <div class="brand-logo">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <span class="brand-title">STORM-VOICE</span>
+          <span class="badge-tag">STORM-BOT ENGINE v1.0</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn-storm" onclick="openVoiceCloneModal()">
+          🎤 Voice Clone Studio
+        </button>
+        <button class="btn-storm" onclick="exportLogs('json')">
+          📥 Export Logs (JSON)
+        </button>
+        <button class="btn-storm btn-primary" onclick="exportLogs('md')">
+          📄 Export Presentation Log
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Dashboard Grid -->
+    <main class="dashboard-grid">
+
+      <!-- Left Panel: Telemetry & Voice Clone Settings -->
+      <aside class="storm-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="title-dot"></span> System Telemetry
+          </div>
+          <span class="badge-tag" id="telemetry-status-tag">ONLINE</span>
+        </div>
+
+        <div class="status-list">
+          <div class="status-item">
+            <span class="status-label">Storage Lock</span>
+            <span class="status-val" id="val-storage">D:\ Drive Isolated</span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">LLM Engine</span>
+            <span class="status-val" id="val-llm">Gemma 4 E2B</span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">LM Studio Link</span>
+            <span class="status-val" id="val-lmstudio">Connected</span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">Speech Recognition</span>
+            <span class="status-val">NVIDIA Parakeet</span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">Speech Synthesis</span>
+            <span class="status-val">Qwen3-TTS / Clone</span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">Hardware Specs</span>
+            <span class="status-val">GTX 1060 (6GB VRAM)</span>
+          </div>
+        </div>
+
+        <div class="panel-header" style="margin-top: 24px;">
+          <div class="panel-title">
+            <span class="title-dot"></span> Active Voice Persona
+          </div>
+        </div>
+        
+        <select id="voice-profile-select" class="input-storm" onchange="switchVoiceProfile(this.value)">
+          <option value="default_storm_bot">Default Storm-Bot Neural Voice</option>
+        </select>
+      </aside>
+
+      <!-- Center Viewport: Storm-Bot Core Reactor Visualizer -->
+      <section class="storm-panel center-viewport">
+        <div class="orb-container">
+          <canvas id="storm-orb-canvas" class="storm-orb-canvas" width="280" height="280"></canvas>
+          <div class="orb-status-text">
+            SYSTEM STATUS: <span id="bot-state-text" class="orb-status-badge">READY & LISTENING</span>
+          </div>
+
+          <div class="control-bar">
+            <button id="mic-toggle-btn" class="mic-toggle-btn" onclick="toggleMicrophone()" title="Start/Stop Microphone">
+              🎙️
+            </button>
+            <button class="btn-storm" onclick="triggerBargeIn()" style="padding: 12px 20px;">
+              🛑 Interrupt Storm-Bot
+            </button>
+          </div>
+        </div>
+
+        <!-- Live VAD Spectrum Meter -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div class="panel-header" style="margin-bottom: 0;">
+            <div class="panel-title"><span class="title-dot"></span> Voice Activity Spectrum</div>
+            <span class="status-val" id="vad-meter-val">RMS: 0.000</span>
+          </div>
+          <canvas id="vad-spectrum-canvas" style="width: 100%; height: 60px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid var(--border-glass);"></canvas>
+        </div>
+      </section>
+
+      <!-- Right Panel: Transcripts & Personality Modes -->
+      <aside class="storm-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="title-dot"></span> Demo Personalities
+          </div>
+        </div>
+
+        <div id="personality-list">
+          <!-- Dynamically filled -->
+        </div>
+
+        <div class="panel-header" style="margin-top: 16px;">
+          <div class="panel-title">
+            <span class="title-dot"></span> Real-Time HUD Transcript
+          </div>
+        </div>
+
+        <div class="transcript-box" id="transcript-box">
+          <div class="transcript-entry bot">
+            <div class="entry-speaker">STORM-BOT <span>SYSTEM INITIALIZED</span></div>
+            Welcome to Storm-Voice. I am Storm-Bot, your real-time local voice assistant. How can I assist your demonstration today?
+          </div>
+        </div>
+      </aside>
+
+    </main>
+
+    <!-- Footer Status Bar -->
+    <footer style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-glass); padding: 0 10px; font-size: 12px; color: var(--text-dim);">
+      <div>Storm-Voice Platform &copy; 2026 | Investor Presentation Mode</div>
+      <div id="latency-indicator">Latency: 0ms | VAD Active</div>
+    </footer>
+
+  </div>
+
+  <!-- Voice Cloning Modal -->
+  <div class="modal-overlay" id="voice-clone-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="font-size: 18px; font-weight: 600;">Microphone / File Voice Cloning</h3>
+        <button class="btn-storm" onclick="closeVoiceCloneModal()">✕</button>
+      </div>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+        Upload a short audio sample (.wav or .mp3) or record via microphone to instantly clone a new custom voice persona for Storm-Bot.
+      </p>
+
+      <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">Persona Name</label>
+      <input type="text" id="clone-name-input" class="input-storm" placeholder="e.g. Executive Sponsor Voice">
+
+      <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">Audio Sample File (.wav / .mp3)</label>
+      <input type="file" id="clone-file-input" class="input-storm" accept="audio/*">
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button class="btn-storm" onclick="closeVoiceCloneModal()">Cancel</button>
+        <button class="btn-storm btn-primary" onclick="submitVoiceClone()">Clone & Activate Voice</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

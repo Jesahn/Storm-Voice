@@ -1,0 +1,8 @@
+{
+  "id": "storm_british_sonia",
+  "name": "Storm British Sonia (Neural AI)",
+  "pitch_shift": 1.0,
+  "speed": 1.0,
+  "neural_voice": "en-GB-SoniaNeural",
+  "description": "Articulate British female neural persona."
+}

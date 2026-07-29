@@ -1,0 +1,9 @@
+{
+  "id": "test_investor_voice",
+  "name": "Test Investor Voice",
+  "pitch_shift": 0.75,
+  "speed": 1.0,
+  "is_cloned": true,
+  "description": "Cloned target voice persona created from test.wav.",
+  "sample_file": "D:\\Projects\\Storm-Voice\\voice_profiles\\test_investor_voice.wav"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Default Storm-Bot",
+  "pitch_shift": 1.0,
+  "formant_freq": 440,
+  "warmth": 0.85,
+  "clarity": 0.95,
+  "description": "Default futuristic Storm-Bot neural voice persona."
+}

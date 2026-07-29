@@ -1,0 +1,22 @@
+# Virtual Environment
+.venv/
+env/
+venv/
+
+# Cache and Isolation Directories
+.cache/
+tmp/
+__pycache__/
+*.pyc
+
+# Local Logs & Session Exports
+logs/
+*.log
+
+# Custom Cloned Voice Media Files
+voice_profiles/*.wav
+voice_profiles/custom_*.json
+
+# OS files
+.DS_Store
+Thumbs.db

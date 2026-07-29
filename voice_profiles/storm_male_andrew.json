@@ -1,0 +1,8 @@
+{
+  "id": "storm_male_andrew",
+  "name": "Storm-Bot Andrew (Neural AI)",
+  "pitch_shift": 1.0,
+  "speed": 1.0,
+  "neural_voice": "en-US-AndrewNeural",
+  "description": "Executive male neural AI voice persona."
+}
