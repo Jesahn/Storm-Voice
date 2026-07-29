@@ -257,7 +257,22 @@ function triggerBargeIn() {
   stopCurrentAudio();
 }
 
-// Audio Playback Queue
+let currentAudioSource = null;
+
+// Global Audio Context Unlock on User Gesture
+function unlockAudioContext() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume().then(() => {
+      console.log("[Storm Audio] AudioContext resumed successfully!");
+    }).catch(err => console.warn("AudioContext resume notice:", err));
+  }
+}
+
+document.addEventListener("click", unlockAudioContext, { passive: true });
+document.addEventListener("keydown", unlockAudioContext, { passive: true });
+
+// Audio Playback Queue via WebAudio API
 function enqueueAudio(base64Data) {
   if (!base64Data) return;
   audioQueue.push(base64Data);
@@ -266,10 +281,10 @@ function enqueueAudio(base64Data) {
   }
 }
 
-function playNextAudioChunk() {
+async function playNextAudioChunk() {
   if (audioQueue.length === 0) {
     isPlayingAudio = false;
-    currentAudioElement = null;
+    currentAudioSource = null;
     return;
   }
 
@@ -277,37 +292,41 @@ function playNextAudioChunk() {
   const base64Data = audioQueue.shift();
 
   try {
-    const audioUrl = "data:audio/wav;base64," + base64Data;
-    currentAudioElement = new Audio(audioUrl);
-    currentAudioElement.volume = 1.0;
+    unlockAudioContext();
+
+    const binaryString = window.atob(base64Data);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioCtx.destination);
     
-    currentAudioElement.onended = () => {
+    currentAudioSource = source;
+
+    source.onended = () => {
       playNextAudioChunk();
     };
 
-    currentAudioElement.onerror = (e) => {
-      console.warn("Audio playback error:", e);
-      playNextAudioChunk();
-    };
-
-    currentAudioElement.play().catch(err => {
-      console.warn("Audio play blocked:", err);
-      playNextAudioChunk();
-    });
+    source.start(0);
   } catch (err) {
-    console.error("Audio playback exception:", err);
+    console.warn("Storm Audio Playback Notice:", err);
     playNextAudioChunk();
   }
 }
 
 function stopCurrentAudio() {
   audioQueue = [];
-  if (currentAudioElement) {
+  if (currentAudioSource) {
     try {
-      currentAudioElement.pause();
-      currentAudioElement.currentTime = 0;
+      currentAudioSource.stop();
+      currentAudioSource.disconnect();
     } catch (e) {}
-    currentAudioElement = null;
+    currentAudioSource = null;
   }
   isPlayingAudio = false;
 }

@@ -35,7 +35,7 @@ class StormSTT:
 
         # Noise / Silence RMS Gate
         rms = float(np.sqrt(np.mean(audio_data ** 2)))
-        if rms < 0.015:
+        if rms < 0.03:
             print(f"[Storm-STT] Ignored low energy chunk (RMS: {rms:.4f})")
             return ""
 
@@ -51,6 +51,25 @@ class StormSTT:
                     generate_kwargs={"language": "english"}
                 )
                 text = result.get("text", "").strip()
+
+                # Anti-Hallucination Filter: Drop Whisper subtitle/noise artifacts
+                text_clean = text.lower().strip("!.,? ")
+                
+                # Check for pure dots / punctuation
+                if not any(c.isalnum() for c in text):
+                    print(f"[Storm-STT] Filtered punctuation-only noise: '{text}'")
+                    return ""
+
+                # Known Whisper-tiny noise hallucinations
+                hallucinations = {
+                    "thank you for watching", "thanks for watching", "thank you for watching!",
+                    "thanks for watching!", "thank you very much", "thank you", "thanks",
+                    "subtitles by", "amara.org", "subscribe", "like and subscribe",
+                    "bye", "goodbye", "thank you.", "thanks."
+                }
+                if text_clean in hallucinations or any(h in text_clean for h in ["thank you for watching", "thanks for watching", "subtitles by"]):
+                    print(f"[Storm-STT] Filtered Whisper hallucination phrase: '{text}'")
+                    return ""
 
                 # Anti-Hallucination Filter: Detect repetitive token loops (e.g. "hey, hey, hey...")
                 words = text.split()
