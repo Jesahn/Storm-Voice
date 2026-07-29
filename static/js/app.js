@@ -518,6 +518,27 @@ async function submitVoiceClone() {
   }
 }
 
+async function testSpeakerOutput() {
+  try {
+    unlockAudioContext();
+    if (audioCtx.state === "suspended") {
+      await audioCtx.resume();
+    }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.5);
+    alert("Test Tone Sent! If you heard a 0.5s chime sound, your browser WebAudio output is working.");
+  } catch (err) {
+    alert("Speaker Test Failed: " + err);
+  }
+}
+
 async function exportLogs(format) {
   try {
     const res = await fetch("/api/export-logs", {
