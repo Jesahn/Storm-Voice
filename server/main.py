@@ -180,7 +180,35 @@ async def websocket_audio_endpoint(websocket: WebSocket):
         
         full_bot_text = ""
         text_sentence_buffer = ""
+        audio_chunks_sent = 0
         session_mgr.set_bot_speaking(True)
+
+        async def synthesize_and_send_voice(text: str, source: str) -> int:
+            speech_text = text.strip()
+            if not speech_text or session_mgr.is_interrupted:
+                return 0
+
+            synth_res = tts_engine.synthesize_speech(speech_text)
+            audio_base64 = synth_res.get("audio_base64", "")
+            if not audio_base64:
+                print(f"[Storm Voice] No audio generated for {source}: {speech_text[:80]}")
+                await safe_send_json({
+                    "type": "bot_audio_status",
+                    "status": "voice_unavailable",
+                    "source": source
+                })
+                return 0
+
+            duration = synth_res.get("duration", 0.0)
+            print(f"[Storm Voice] Sending {source} audio chunk ({duration:.2f}s, {len(audio_base64)} base64 chars).")
+            await safe_send_json({
+                "type": "bot_audio_chunk",
+                "audio": audio_base64,
+                "audio_base64": audio_base64,
+                "duration": duration,
+                "source": source
+            })
+            return 1
 
         async for chunk in llm_client.stream_response(history):
             if session_mgr.is_interrupted:
@@ -198,25 +226,17 @@ async def websocket_audio_endpoint(websocket: WebSocket):
 
             # Synthesize voice for sentence boundaries to achieve low latency
             if any(punct in text_sentence_buffer for punct in [".", "?", "!", "\n"]):
-                synth_res = tts_engine.synthesize_speech(text_sentence_buffer)
+                sentence_text = text_sentence_buffer
                 text_sentence_buffer = ""
-
-                if synth_res.get("audio_base64"):
-                    await safe_send_json({
-                        "type": "bot_audio_chunk",
-                        "audio": synth_res["audio_base64"],
-                        "duration": synth_res["duration"]
-                    })
+                audio_chunks_sent += await synthesize_and_send_voice(sentence_text, "sentence")
 
         # Synthesize any remaining trailing text buffer
         if text_sentence_buffer.strip() and not session_mgr.is_interrupted:
-            synth_res = tts_engine.synthesize_speech(text_sentence_buffer)
-            if synth_res.get("audio_base64"):
-                await safe_send_json({
-                    "type": "bot_audio_chunk",
-                    "audio": synth_res["audio_base64"],
-                    "duration": synth_res["duration"]
-                })
+            audio_chunks_sent += await synthesize_and_send_voice(text_sentence_buffer, "trailing")
+
+        # Final fallback: if text streamed but no voice chunk was delivered, synthesize the full response once.
+        if full_bot_text.strip() and audio_chunks_sent == 0 and not session_mgr.is_interrupted:
+            audio_chunks_sent += await synthesize_and_send_voice(full_bot_text, "full_response_fallback")
 
         if full_bot_text.strip():
             latency_ms = (time.time() - start_time) * 1000.0

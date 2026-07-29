@@ -185,7 +185,11 @@ function initWebSocket() {
       setBotState("TALKING");
       appendBotChunk(msg.chunk);
     } else if (msg.type === "bot_audio_chunk") {
-      enqueueAudio(msg.audio);
+      console.log(`[Storm Audio] Received ${msg.source || "response"} voice chunk (${msg.duration || 0}s).`);
+      enqueueAudio(msg.audio || msg.audio_base64);
+    } else if (msg.type === "bot_audio_status") {
+      console.warn(`[Storm Audio] Voice status: ${msg.status || "unavailable"}`);
+      showStormNotice("Storm voice is preparing the response audio.");
     } else if (msg.type === "barge_in_stop") {
       stopCurrentAudio();
       setBotState("LISTENING");
