@@ -33,9 +33,9 @@ class StormSTT:
         if len(audio_data) == 0:
             return ""
 
-        # Noise / Silence RMS Gate
+        # Noise / Silence RMS Gate (0.008 allows normal mic speech while ignoring total silence)
         rms = float(np.sqrt(np.mean(audio_data ** 2)))
-        if rms < 0.03:
+        if rms < 0.008:
             print(f"[Storm-STT] Ignored low energy chunk (RMS: {rms:.4f})")
             return ""
 

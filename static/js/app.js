@@ -301,7 +301,9 @@ async function playNextAudioChunk() {
       bytes[i] = binaryString.charCodeAt(i);
     }
 
-    const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+    // Slice buffer to prevent detached buffer errors across WebAudio decoding
+    const bufferCopy = bytes.buffer.slice(0);
+    const audioBuffer = await audioCtx.decodeAudioData(bufferCopy);
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioCtx.destination);
@@ -314,8 +316,16 @@ async function playNextAudioChunk() {
 
     source.start(0);
   } catch (err) {
-    console.warn("Storm Audio Playback Notice:", err);
-    playNextAudioChunk();
+    console.warn("Storm WebAudio notice, switching to fallback:", err);
+    try {
+      const audioUrl = "data:audio/wav;base64," + base64Data;
+      const audio = new Audio(audioUrl);
+      audio.onended = () => playNextAudioChunk();
+      audio.onerror = () => playNextAudioChunk();
+      audio.play().catch(() => playNextAudioChunk());
+    } catch (e) {
+      playNextAudioChunk();
+    }
   }
 }
 
