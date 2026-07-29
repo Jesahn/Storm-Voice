@@ -3,6 +3,7 @@
 let socket = null;
 let audioCtx = null;
 let micStream = null;
+let micSourceNode = null;
 let scriptProcessor = null;
 let dummyGainNode = null;
 let isMicActive = false;
@@ -220,6 +221,8 @@ async function toggleMicrophone() {
 
 async function startMicrophone() {
   try {
+    stopMicCaptureHardware();
+
     // Native hardware sample rate (e.g. 48kHz) to avoid locking Windows WASAPI audio device
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === "suspended") {
@@ -235,19 +238,20 @@ async function startMicrophone() {
       }
     });
     
-    const source = audioCtx.createMediaStreamSource(micStream);
+    micSourceNode = audioCtx.createMediaStreamSource(micStream);
     scriptProcessor = audioCtx.createScriptProcessor(4096, 1, 1);
 
     // Mute mic speaker feedback using a zero-gain node so mic doesn't play back out of speakers
     dummyGainNode = audioCtx.createGain();
     dummyGainNode.gain.value = 0;
 
-    source.connect(scriptProcessor);
+    micSourceNode.connect(scriptProcessor);
     scriptProcessor.connect(dummyGainNode);
     dummyGainNode.connect(audioCtx.destination);
 
     scriptProcessor.onaudioprocess = (e) => {
       if (!isMicActive || !socket || socket.readyState !== WebSocket.OPEN) return;
+      if (isMicCapturePaused) return;
 
       // Prevent Storm's own speaker output from being sent back into VAD as a false barge-in.
       if (isPlayingAudio) return;
@@ -264,8 +268,10 @@ async function startMicrophone() {
     };
 
     isMicActive = true;
+    isMicCapturePaused = false;
     const btn = getEl("mic-toggle-btn");
     if (btn) btn.classList.add("active");
+    updateAudioDiagnostics();
     setBotState("LISTENING");
   } catch (err) {
     showStormNotice("Storm needs microphone access to listen.");
@@ -273,9 +279,7 @@ async function startMicrophone() {
 }
 
 function stopMicrophone() {
-  if (scriptProcessor) scriptProcessor.disconnect();
-  if (dummyGainNode) dummyGainNode.disconnect();
-  if (micStream) micStream.getTracks().forEach(track => track.stop());
+  stopMicCaptureHardware();
   isMicCapturePaused = false;
   isMicActive = false;
   const btn = getEl("mic-toggle-btn");
@@ -432,16 +436,48 @@ function stopCurrentAudio() {
 }
 
 function setMicCapturePaused(paused, reason) {
-  if (!micStream || !isMicActive) return;
+  if (!isMicActive) return;
   if (isMicCapturePaused === paused) return;
 
-  micStream.getAudioTracks().forEach(track => {
-    track.enabled = !paused;
-  });
-
   isMicCapturePaused = paused;
+
+  if (paused) {
+    stopMicCaptureHardware();
+  } else {
+    startMicrophone();
+  }
+
   console.log(`[Storm Mic] ${paused ? "Paused" : "Resumed"} capture: ${reason}.`);
   updateAudioDiagnostics();
+}
+
+function stopMicCaptureHardware() {
+  if (scriptProcessor) {
+    try {
+      scriptProcessor.disconnect();
+    } catch (e) {}
+    scriptProcessor.onaudioprocess = null;
+    scriptProcessor = null;
+  }
+
+  if (dummyGainNode) {
+    try {
+      dummyGainNode.disconnect();
+    } catch (e) {}
+    dummyGainNode = null;
+  }
+
+  if (micSourceNode) {
+    try {
+      micSourceNode.disconnect();
+    } catch (e) {}
+    micSourceNode = null;
+  }
+
+  if (micStream) {
+    micStream.getTracks().forEach(track => track.stop());
+    micStream = null;
+  }
 }
 
 function notifyPlaybackFinished() {
