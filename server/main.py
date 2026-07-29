@@ -167,8 +167,9 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                     "rms": vad_res["rms"]
                 })
 
-                # Check for Barge-In Interruption if user starts speaking while Storm-Bot is generating/playing
-                if vad_res["speech_started"] and session_mgr.is_bot_speaking:
+                # Check for Barge-In Interruption if user starts speaking with high energy while Storm-Bot is generating/playing
+                if vad_res["speech_started"] and session_mgr.is_bot_speaking and vad_res["rms"] > 0.06:
+                    print("[Storm-Bot] User barge-in detected! Halting bot audio.")
                     session_mgr.trigger_barge_in()
                     await websocket.send_json({"type": "barge_in_stop"})
 

@@ -157,17 +157,21 @@ function initWebSocket() {
     } else if (msg.type === "user_transcript") {
       appendUserTranscript(msg.text);
     } else if (msg.type === "bot_thinking") {
+      isPlayingAudio = true;
       setBotState("THINKING");
     } else if (msg.type === "bot_text_chunk") {
+      isPlayingAudio = true;
       setBotState("TALKING");
       appendBotChunk(msg.chunk);
     } else if (msg.type === "bot_audio_chunk") {
+      isPlayingAudio = true;
       enqueueAudio(msg.audio);
     } else if (msg.type === "barge_in_stop") {
       stopCurrentAudio();
       setBotState("LISTENING");
     } else if (msg.type === "bot_finished") {
-      setTimeout(() => setBotState("LISTENING"), 1000);
+      // Check audio queue drain before returning to listening state
+      checkBotFinished();
     }
   };
 
@@ -326,6 +330,15 @@ async function playNextAudioChunk() {
     } catch (e) {
       playNextAudioChunk();
     }
+  }
+}
+
+function checkBotFinished() {
+  if (audioQueue.length === 0 && !currentAudioSource) {
+    isPlayingAudio = false;
+    setBotState("LISTENING");
+  } else {
+    setTimeout(checkBotFinished, 200);
   }
 }
 
