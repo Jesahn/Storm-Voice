@@ -146,6 +146,89 @@ async def websocket_audio_endpoint(websocket: WebSocket):
     print("[Storm WebSocket] Client connected.")
 
     vad = StormVAD()
+    ws_lock = asyncio.Lock()
+
+    async def safe_send_json(data: dict):
+        async with ws_lock:
+            try:
+                await websocket.send_json(data)
+            except Exception as err:
+                pass
+
+    async def generate_bot_response(audio_buffer):
+        session_mgr.clear_interrupted()
+        
+        # 1. Transcribe audio via STT
+        user_text = stt_engine.transcribe(audio_buffer)
+        if not user_text.strip():
+            return
+
+        session_mgr.add_user_turn(user_text)
+
+        # Send User Transcript to UI
+        await safe_send_json({
+            "type": "user_transcript",
+            "text": user_text
+        })
+
+        # Notify UI that Storm-Bot is thinking
+        await safe_send_json({"type": "bot_thinking"})
+
+        # 2. Get history and stream LLM response from Gemma 4 E2B
+        history = session_mgr.get_formatted_history()
+        start_time = time.time()
+        
+        full_bot_text = ""
+        text_sentence_buffer = ""
+        session_mgr.set_bot_speaking(True)
+
+        async for chunk in llm_client.stream_response(history):
+            if session_mgr.is_interrupted:
+                print("[Storm-Bot] Streaming cancelled due to user interruption.")
+                break
+
+            full_bot_text += chunk
+            text_sentence_buffer += chunk
+
+            # Stream partial text to UI
+            await safe_send_json({
+                "type": "bot_text_chunk",
+                "chunk": chunk
+            })
+
+            # Synthesize voice for sentence boundaries to achieve low latency
+            if any(punct in text_sentence_buffer for punct in [".", "?", "!", "\n"]):
+                synth_res = tts_engine.synthesize_speech(text_sentence_buffer)
+                text_sentence_buffer = ""
+
+                if synth_res.get("audio_base64"):
+                    await safe_send_json({
+                        "type": "bot_audio_chunk",
+                        "audio": synth_res["audio_base64"],
+                        "duration": synth_res["duration"]
+                    })
+
+        # Synthesize any remaining trailing text buffer
+        if text_sentence_buffer.strip() and not session_mgr.is_interrupted:
+            synth_res = tts_engine.synthesize_speech(text_sentence_buffer)
+            if synth_res.get("audio_base64"):
+                await safe_send_json({
+                    "type": "bot_audio_chunk",
+                    "audio": synth_res["audio_base64"],
+                    "duration": synth_res["duration"]
+                })
+
+        session_mgr.set_bot_speaking(False)
+
+        if full_bot_text.strip():
+            latency_ms = (time.time() - start_time) * 1000.0
+            session_mgr.add_bot_turn(
+                full_bot_text, 
+                latency_ms=latency_ms,
+                voice_profile=tts_engine.active_voice_profile
+            )
+
+        await safe_send_json({"type": "bot_finished"})
 
     try:
         while True:
@@ -154,106 +237,35 @@ async def websocket_audio_endpoint(websocket: WebSocket):
             
             if "bytes" in message and message["bytes"]:
                 raw_bytes = message["bytes"]
-                # Convert 16kHz int16 PCM bytes to float32 numpy array
                 int16_data = np.frombuffer(raw_bytes, dtype=np.int16)
                 float32_data = int16_data.astype(np.float32) / 32768.0
 
                 vad_res = vad.process_chunk(float32_data)
 
-                # Send live VAD meter status to browser visualizer
-                await websocket.send_json({
-                    "type": "vad_meter",
-                    "status": vad_res["status"],
-                    "rms": vad_res["rms"]
-                })
+                # Send live VAD meter status to browser visualizer (only when bot is not speaking)
+                if not session_mgr.is_bot_speaking:
+                    await safe_send_json({
+                        "type": "vad_meter",
+                        "status": vad_res["status"],
+                        "rms": vad_res["rms"]
+                    })
 
                 # Check for Barge-In Interruption if user starts speaking with high energy while Storm-Bot is generating/playing
                 if vad_res["speech_started"] and session_mgr.is_bot_speaking and vad_res["rms"] > 0.06:
                     print("[Storm-Bot] User barge-in detected! Halting bot audio.")
                     session_mgr.trigger_barge_in()
-                    await websocket.send_json({"type": "barge_in_stop"})
+                    await safe_send_json({"type": "barge_in_stop"})
 
                 # On Speech End (User finished speaking)
                 if vad_res["speech_ended"] and vad_res["audio_buffer"] is not None:
-                    session_mgr.clear_interrupted()
-                    
-                    # 1. Transcribe audio via STT
-                    user_text = stt_engine.transcribe(vad_res["audio_buffer"])
-                    if not user_text.strip():
-                        continue
-
-                    session_mgr.add_user_turn(user_text)
-
-                    # Send User Transcript to UI
-                    await websocket.send_json({
-                        "type": "user_transcript",
-                        "text": user_text
-                    })
-
-                    # Notify UI that Storm-Bot is thinking
-                    await websocket.send_json({"type": "bot_thinking"})
-
-                    # 2. Get history and stream LLM response from Gemma 4 E2B
-                    history = session_mgr.get_formatted_history()
-                    start_time = time.time()
-                    
-                    full_bot_text = ""
-                    text_sentence_buffer = ""
-                    session_mgr.set_bot_speaking(True)
-
-                    async for chunk in llm_client.stream_response(history):
-                        if session_mgr.is_interrupted:
-                            print("[Storm-Bot] Streaming cancelled due to user interruption.")
-                            break
-
-                        full_bot_text += chunk
-                        text_sentence_buffer += chunk
-
-                        # Stream partial text to UI
-                        await websocket.send_json({
-                            "type": "bot_text_chunk",
-                            "chunk": chunk
-                        })
-
-                        # Synthesize voice for sentence boundaries to achieve low latency
-                        if any(punct in text_sentence_buffer for punct in [".", "?", "!", "\n"]):
-                            synth_res = tts_engine.synthesize_speech(text_sentence_buffer)
-                            text_sentence_buffer = ""
-
-                            if synth_res["audio_base64"]:
-                                await websocket.send_json({
-                                    "type": "bot_audio_chunk",
-                                    "audio": synth_res["audio_base64"],
-                                    "duration": synth_res["duration"]
-                                })
-
-                    # Synthesize any remaining trailing text buffer
-                    if text_sentence_buffer.strip() and not session_mgr.is_interrupted:
-                        synth_res = tts_engine.synthesize_speech(text_sentence_buffer)
-                        if synth_res["audio_base64"]:
-                            await websocket.send_json({
-                                "type": "bot_audio_chunk",
-                                "audio": synth_res["audio_base64"],
-                                "duration": synth_res["duration"]
-                            })
-
-                    session_mgr.set_bot_speaking(False)
-
-                    if full_bot_text.strip():
-                        latency_ms = (time.time() - start_time) * 1000.0
-                        session_mgr.add_bot_turn(
-                            full_bot_text, 
-                            latency_ms=latency_ms,
-                            voice_profile=tts_engine.active_voice_profile
-                        )
-
-                    await websocket.send_json({"type": "bot_finished"})
+                    audio_buf = vad_res["audio_buffer"]
+                    asyncio.create_task(generate_bot_response(audio_buf))
 
             elif "text" in message and message["text"]:
                 data = json.loads(message["text"])
                 if data.get("action") == "interrupt":
                     session_mgr.trigger_barge_in()
-                    await websocket.send_json({"type": "barge_in_stop"})
+                    await safe_send_json({"type": "barge_in_stop"})
 
     except WebSocketDisconnect:
         print("[Storm WebSocket] Client disconnected.")
