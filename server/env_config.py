@@ -21,7 +21,8 @@ for folder in [CACHE_DIR, TMP_DIR, HF_CACHE, TORCH_CACHE, PIP_CACHE, PROFILES_DI
 os.environ["HF_HOME"] = str(HF_CACHE)
 os.environ["HUGGINGFACE_HUB_CACHE"] = str(HF_CACHE)
 os.environ["TORCH_HOME"] = str(TORCH_CACHE)
-os.environ["PIP_CACHE_DIR"] = str(PIP_CACHE)
+os.environ["COQUI_TOS_AGREED"] = "1"
+os.environ["TTS_HOME"] = str(CACHE_DIR / "tts")
 os.environ["TMPDIR"] = str(TMP_DIR)
 os.environ["TEMP"] = str(TMP_DIR)
 os.environ["TMP"] = str(TMP_DIR)

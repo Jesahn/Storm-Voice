@@ -1,0 +1,8 @@
+{
+  "id": "storm_male_adam",
+  "name": "Storm-Bot Adam (Kokoro Neural AI)",
+  "pitch_shift": 1.0,
+  "speed": 1.0,
+  "kokoro_voice": "am_adam",
+  "description": "Executive male neural AI voice persona."
+}

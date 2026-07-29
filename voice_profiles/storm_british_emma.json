@@ -1,0 +1,8 @@
+{
+  "id": "storm_british_emma",
+  "name": "Storm British Emma (Kokoro Neural AI)",
+  "pitch_shift": 1.0,
+  "speed": 1.0,
+  "kokoro_voice": "bf_emma",
+  "description": "Articulate British female neural persona."
+}
